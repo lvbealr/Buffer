@@ -17,12 +17,12 @@ inline bufferError readFile(Buffer<T> *bufferStruct, const char* filename) {
     FILE* file = fopen(filename, "r");
     customWarning(file, POINTER_IS_NULL);
 
-    GetSizeOfBuffer(&(bufferStruct->size), filename);
+    getSizeOfBuffer(&(bufferStruct->size), filename);
 
     bufferStruct->data = (T* )calloc(size_t (bufferStruct->size + 1), sizeof(T));
     customWarning(bufferStruct->data, CALLOC_ERROR);
 
-    ScanFileToBuffer<T>(bufferStruct, filename);
+    scanFileToBuffer<T>(bufferStruct, filename);
 
     return NO_ERRORS;
 }
