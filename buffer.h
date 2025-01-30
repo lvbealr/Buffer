@@ -4,111 +4,155 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <cstring>
 
 #include "customWarning.h"
 #include "colorPrint.h"
-#include "bufferDefinitions.h"
+
+enum bufferError {
+    NO_BUFFER_ERROR = 0,
+    POINTER_IS_NULL = 1,
+    DOUBLE_IS_NAN   = 2,
+    FILE_OPEN_ERROR = 3,
+    FILE_READ_ERROR = 4,
+    STAT_ERROR      = 5,
+    CALLOC_ERROR    = 6,
+    VALUE_ERROR     = 7,
+    INPUT_ERROR     = 8,
+    PROGRAM_ERROR   = 9,
+};
 
 template <typename T>
-inline bufferError readFile(Buffer<T> *bufferStruct, const char* filename) {
-    customWarning(bufferStruct,  POINTER_IS_NULL);
-    customWarning(filename,      POINTER_IS_NULL);
+struct Buffer {
+    size_t capacity     = 0;
+    size_t currentIndex = 0;
 
-    FILE* file = fopen(filename, "r");
-    customWarning(file, POINTER_IS_NULL);
+    T *data             = NULL;
+};
 
-    getSizeOfBuffer(&(bufferStruct->size), filename);
-
-    bufferStruct->data = (T* )calloc(size_t (bufferStruct->size + 1), sizeof(T));
-    customWarning(bufferStruct->data, CALLOC_ERROR);
-
-    scanFileToBuffer<T>(bufferStruct, filename);
-
-    return NO_ERRORS;
+#define FREE_(ptr) { \
+    free(ptr);       \
+    ptr = NULL;      \
 }
 
-inline bufferError getSizeOfBuffer(int *size, const char *filename) {
-    customWarning(size,     POINTER_IS_NULL);
-    customWarning(filename, POINTER_IS_NULL);
+// FUNCTION PROTOTYPES //
+template<typename T>
+bufferError bufferInitialize     (Buffer<T>    *buffer, size_t      capacity = 0);
+template<typename T>
+bufferError bufferDestruct       (Buffer<T>    *buffer);
+template<typename T>
+bufferError writeDataToBuffer    (Buffer<T>    *buffer, const void *data, size_t dataSize);
+template<typename T>
+bufferError bufferCopy           (Buffer<T>    *src,    Buffer<T>  *dest);
+template<typename T> 
+bufferError bufferExpand         (Buffer<T>    *buffer, size_t      dataSize);
+inline
+bufferError writeStringToBuffer  (Buffer<char> *buffer, const char *string);
+inline
+bufferError writeFileDataToBuffer(Buffer<char> *buffer, const char *fileName);
+// FUNCTION PROTOTYPES //
 
-    struct stat bufferInformation = {};
+template<typename T>
+bufferError bufferInitialize(Buffer<T> *buffer, size_t capacity) {
+    customWarning(buffer != NULL, bufferError::POINTER_IS_NULL);
 
-    int statCheck = stat(filename, &bufferInformation);
-    customWarning(statCheck != -1, STAT_ERROR);
+    buffer->capacity = capacity;
 
-    *size = (int) bufferInformation.st_size;
+    buffer->data = (T *)calloc(buffer->capacity, sizeof(T));
+    customWarning(buffer->data != NULL, bufferError::CALLOC_ERROR);
 
-    return NO_ERRORS;
+    return bufferError::NO_BUFFER_ERROR;
 }
 
-template <typename T>
-inline bufferError scanFileToBuffer(Buffer<T> *bufferStruct, const char *filename) {
-    customWarning(bufferStruct,  POINTER_IS_NULL);
-    customWarning(filename,      POINTER_IS_NULL);
+template<typename T>
+bufferError bufferDestruct(Buffer<T> *buffer) {
+    customWarning(buffer != NULL, bufferError::POINTER_IS_NULL);
 
-    customPrint(red, bold, bgDefault, "Please specialize type for %s | FILE: %s | LINE: %d\n",\
-                __func__, __FILE__, __LINE__);
+    FREE_(buffer->data);
 
-    return NO_ERRORS;
+    return bufferError::NO_BUFFER_ERROR;
 }
 
-template <>
-inline bufferError scanFileToBuffer<char>(Buffer<char> *bufferStruct, const char *filename) {
-    customWarning(bufferStruct,      POINTER_IS_NULL);
-    customWarning(filename,          POINTER_IS_NULL);
-    customWarning(bufferStruct != 0, FILE_READ_ERROR);
+template<typename T>
+bufferError writeDataToBuffer(Buffer<T> *buffer, const void *data, size_t dataSize) {
+    customWarning(buffer != NULL, bufferError::POINTER_IS_NULL);
+    customWarning(data   != NULL, bufferError::POINTER_IS_NULL);
 
-    FILE *file = fopen(filename, "r");
-    customWarning(file, FILE_OPEN_ERROR);
-
-    fread(bufferStruct->data, sizeof(char), (size_t) bufferStruct->size, file);
-
-    fclose(file);
-
-    return NO_ERRORS;
-}
-
-inline bufferError getLinePointerFromFile(Buffer<char *> *bufferStruct, Buffer<char> *text) {
-    customWarning(bufferStruct, POINTER_IS_NULL);
-    customWarning(text,         POINTER_IS_NULL);
-
-    bufferStruct->size = countLines(text);
-
-    bufferStruct->data = (char **)calloc((size_t) (bufferStruct->size + 1), sizeof(char *));
-    customWarning(bufferStruct->data, CALLOC_ERROR);
-
-    int lineIndex = 1;
-    bufferStruct->data[0] = text->data;
-    for(int index = 0; index < text->size; index++) {
-        if(text->data[index] == '\n') {
-            bufferStruct->data[lineIndex] = &(text->data[index + 1]);
-            lineIndex++;
-        }
+    if (buffer->capacity == 0) {
+        buffer->capacity = 1;
     }
 
-    printf("> %s", bufferStruct->data[0]);
+    bufferExpand(buffer, dataSize);
 
-    return NO_ERRORS;
+    for (size_t dataIndex = 0; dataIndex < dataSize; dataIndex++) {
+        buffer->data[buffer->currentIndex++] = ((const T *)data)[dataIndex];
+    }
+
+    return bufferError::NO_BUFFER_ERROR;
 }
 
-template <typename T>
-inline int countLines(Buffer<T> *bufferStruct) {
-    customWarning(bufferStruct, POINTER_IS_NULL);
+template<typename T>
+bufferError bufferCopy(Buffer<T> *src, Buffer<T> *dest) {
+    customWarning(src  != NULL, bufferError::POINTER_IS_NULL);
+    customWarning(dest != NULL, bufferError::POINTER_IS_NULL);
 
-    customPrint(red, bold, bgDefault, "Please specialize type for %s | FILE: %s | LINE: %d\n",\
-                __func__, __FILE__, __LINE__);
+    dest->capacity     = src->capacity;
+    dest->currentIndex = src->currentIndex;
 
-    return NO_ERRORS;
+    dest->data = (T *)calloc(dest->capacity, sizeof(T));
+    customWarning(dest->data != NULL, bufferError::CALLOC_ERROR);
+
+    memcpy(dest->data, src->data, src->currentIndex * sizeof(T));
+
+    return bufferError::NO_BUFFER_ERROR;
 }
 
-template <typename T>
-inline bufferError bufferDestruct(Buffer<T> *bufferStruct) {
-    customWarning(bufferStruct, POINTER_IS_NULL);
+template<typename T>
+bufferError bufferExpand(Buffer<T> *buffer, size_t dataSize) {
+    customWarning(buffer != NULL, bufferError::POINTER_IS_NULL);
 
-    customPrint(red, bold, bgDefault, "Please specialize type for %s | FILE: %s | LINE: %d\n",\
-                __func__, __FILE__, __LINE__);
+    while (dataSize > buffer->capacity - buffer->currentIndex) {
+        buffer->capacity *= 2;
+    }
 
-    return NO_ERRORS;
+    buffer->data = (T *)realloc(buffer->data, buffer->capacity * sizeof(T));
+    customWarning(buffer->data != NULL, bufferError::CALLOC_ERROR);
+
+    return bufferError::NO_BUFFER_ERROR;
 }
 
-#endif
+inline bufferError writeStringToBuffer(Buffer<char> *buffer, const char *string) {
+    return writeDataToBuffer(buffer, string, strlen(string));
+}
+
+inline bufferError writeFileDataToBuffer(Buffer<char> *buffer, const char *fileName) {
+    customWarning(buffer   != NULL, bufferError::POINTER_IS_NULL);
+    customWarning(fileName != NULL, bufferError::POINTER_IS_NULL);
+
+    if (buffer->capacity == 0) {
+        buffer->capacity = 1;
+    }
+
+    struct stat bufferInfo = {};
+
+    int statCheck = stat(fileName, &bufferInfo);
+    customWarning(statCheck != -1, bufferError::STAT_ERROR);
+
+    int fileSize = bufferInfo.st_size;
+
+    int openFile = open(fileName, O_RDONLY);
+    customWarning(openFile != -1, bufferError::FILE_OPEN_ERROR);
+
+    bufferExpand(buffer, fileSize);
+
+    int readFile = read(openFile, buffer->data + buffer->currentIndex, fileSize);
+    customWarning(readFile == fileSize, bufferError::FILE_READ_ERROR);
+
+    buffer->currentIndex += fileSize;
+
+    return bufferError::NO_BUFFER_ERROR;
+}
+
+#endif // BUFFER_H_
