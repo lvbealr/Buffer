@@ -12,16 +12,18 @@
 #include "colorPrint.h"
 
 enum bufferError {
-    NO_BUFFER_ERROR = 0,
-    POINTER_IS_NULL = 1,
-    DOUBLE_IS_NAN   = 2,
-    FILE_OPEN_ERROR = 3,
-    FILE_READ_ERROR = 4,
-    STAT_ERROR      = 5,
-    CALLOC_ERROR    = 6,
-    VALUE_ERROR     = 7,
-    INPUT_ERROR     = 8,
-    PROGRAM_ERROR   = 9,
+    NO_BUFFER_ERROR =  0,
+    POINTER_IS_NULL =  1,
+    DOUBLE_IS_NAN   =  2,
+    FILE_OPEN_ERROR =  3,
+    FILE_READ_ERROR =  4,
+    STAT_ERROR      =  5,
+    CALLOC_ERROR    =  6,
+    VALUE_ERROR     =  7,
+    INPUT_ERROR     =  8,
+    PROGRAM_ERROR   =  9,
+    BUFFER_ENDED    = 10,
+    NO_BUFFER       = 11
 };
 
 template <typename T>
